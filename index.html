@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英文並び替えゲーム - チャレンジ！</title>
+    <style>
+        body {
+            font-family: 'Arial Rounded MT Bold', 'Helvetica Rounded', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f8ff;
+            color: #333;
+        }
+        h1, h2 {
+            color: #4a86e8;
+            text-align: center;
+        }
+        #sentences-container {
+            margin-bottom: 20px;
+        }
+        .sentence {
+            background-color: #fff;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            cursor: move;
+            touch-action: none;
+            user-select: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .sentence.dragging {
+            opacity: 0.8;
+            background-color: #e6f2ff;
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        button {
+            background-color: #4a86e8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 18px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #3a76d8;
+        }
+        #result {
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 英文並び替えゲーム 🎮</h1>
+    <h2>チャレンジ！</h2>
+    <div id="student-section">
+        <p>英文を正しい順序に並び替えよう！文をドラッグして動かせるよ。</p>
+        <div id="sentences-container"></div>
+        <div style="text-align: center;">
+            <button onclick="checkOrder()">チェック！</button>
+            <button onclick="playAudio()">音声を聞く 🔊</button>
+        </div>
+        <p id="result"></p>
+    </div>
+
+    <script>
+        let originalSentences = [];
+        let shuffledSentences = [];
+        let draggedElement = null;
+        let touchY = 0;
+
+        function initializeGame() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const encodedSentences = urlParams.get('sentences');
+            if (encodedSentences) {
+                originalSentences = JSON.parse(decodeURIComponent(encodedSentences));
+                shuffledSentences = [...originalSentences];
+                shuffleArray(shuffledSentences);
+                displaySentences();
+            } else {
+                document.getElementById('student-section').innerHTML = '<p>エラー: 問題が見つかりません。先生に確認してね！</p>';
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function displaySentences() {
+            const container = document.getElementById('sentences-container');
+            container.innerHTML = '';
+            shuffledSentences.forEach((sentence, index) => {
+                const div = document.createElement('div');
+                div.className = 'sentence';
+                div.textContent = sentence;
+                div.setAttribute('data-index', index);
+                div.addEventListener('mousedown', dragStart);
+                div.addEventListener('touchstart', touchStart);
+                container.appendChild(div);
+            });
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', dragEnd);
+            document.addEventListener('touchmove', touchMove);
+            document.addEventListener('touchend', touchEnd);
+        }
+
+        function dragStart(e) {
+            draggedElement = e.target;
+            draggedElement.classList.add('dragging');
+        }
+
+        function drag(e) {
+            if (!draggedElement) return;
+            e.preventDefault();
+            const container = document.getElementById('sentences-container');
+            const afterElement = getDragAfterElement(container, e.clientY);
+            if (afterElement == null) {
+                container.appendChild(draggedElement);
+            } else {
+                container.insertBefore(draggedElement, afterElement);
+            }
+        }
+
+        function dragEnd() {
+            if (!draggedElement) return;
+            draggedElement.classList.remove('dragging');
+            updateShuffledSentences();
+            draggedElement = null;
+        }
+
+        function touchStart(e) {
+            draggedElement = e.target;
+            draggedElement.classList.add('dragging');
+            touchY = e.touches[0].clientY;
+        }
+
+        function touchMove(e) {
+            if (!draggedElement) return;
+            e.preventDefault();
+            const newY = e.touches[0].clientY;
+            const container = document.getElementById('sentences-container');
+            const afterElement = getDragAfterElement(container, newY);
+            if (afterElement == null) {
+                container.appendChild(draggedElement);
+            } else {
+                container.insertBefore(draggedElement, afterElement);
+            }
+            touchY = newY;
+        }
+
+        function touchEnd() {
+            if (!draggedElement) return;
+            draggedElement.classList.remove('dragging');
+            updateShuffledSentences();
+            draggedElement = null;
+        }
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.sentence:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        function updateShuffledSentences() {
+            const container = document.getElementById('sentences-container');
+            shuffledSentences = [...container.querySelectorAll('.sentence')].map(el => el.textContent);
+        }
+
+        function checkOrder() {
+            const isCorrect = JSON.stringify(originalSentences) === JSON.stringify(shuffledSentences);
+            const resultElement = document.getElementById('result');
+            if (isCorrect) {
+                resultElement.textContent = '🎉 正解！すばらしい！ 🎉';
+                resultElement.style.color = '#4CAF50';
+            } else {
+                resultElement.textContent = '🤔 惜しい！もう一度チャレンジしてみよう！';
+                resultElement.style.color = '#FF9800';
+            }
+        }
+
+        function playAudio() {
+            const utterance = new SpeechSynthesisUtterance(originalSentences.join('. '));
+            utterance.lang = 'en-US';
+            speechSynthesis.speak(utterance);
+        }
+
+        window.onload = initializeGame;
+    </script>
+</body>
+</html>
